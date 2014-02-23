@@ -20,9 +20,7 @@ public class Client {
 		 * where \n is the Enter,the last \n represents an empty line, when the
 		 * server detects the empty lines, this request package ends
 		 */
-		int haha = 0;
 		while (true) {
-			haha++;
 
 			/*********************************************************************/
 			/* this upper part is the senting data part */
@@ -63,10 +61,7 @@ public class Client {
 					// every request the same
 					data = " ";
 				}
-				if (true)
-					sb.append(command + " ME\n" + data + "\n");
-				else
-					sb.append(command + " OTHER\n" + data + "\n");
+				sb.append(command + "\n" + data + "\n");
 				// System.out.println("["+command + " ME\n" + data + "\n\n]");
 			} catch (IOException ex) {
 				// ex.printStackTrace();
@@ -146,7 +141,6 @@ public class Client {
 			 * respond yet we block here to wait for the respond for that
 			 */
 			while (!hasMeRespond) {
-
 				/* block and read the first line, which is the head */
 				String head = null;
 				head = br.readLine();
@@ -174,6 +168,8 @@ public class Client {
 					pre = cur;
 				}
 				/* now data is all the data with a \n at the end */
+				/*drop that last \n*/
+				dataSb.deleteCharAt(dataSb.length()-1);
 				String data = dataSb.toString();
 
 				/* analyze the head */
