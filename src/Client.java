@@ -4,6 +4,10 @@ import java.util.*;
 
 public class Client {
 	private Socket socket;
+	
+	/*this is used to represents this client has issued the logout command*/
+	/*we are logging out, but first outputing all the messages in the buffer*/
+	private boolean loggingOut=false;
 
 	public Client(String host, int port) throws IOException {
 		socket = new Socket(host, port);
@@ -12,16 +16,95 @@ public class Client {
 	}
 
 	private void service() throws IOException, RuntimeException {
+		
 		/**
-		 * the format of the request is: command\n data..data..data..\n \n
+		 * the format of the request is: 
+		 * command\n 
+		 * data..data..data..\n 
+		 * \n
 		 * 
 		 * there cannot be a \n\n in data, it is not allowed
 		 * 
 		 * where \n is the Enter,the last \n represents an empty line, when the
 		 * server detects the empty lines, this request package ends
 		 */
+		
+		/*the login parse, client need to get through this in order to get to send command parse*/
+		loginLoop:
+		while(true){
+			BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
+			StringBuffer requestDataSb = new StringBuffer();
+			System.out.print("Username:");
+			requestDataSb.append(input.readLine()+'\n');
+			System.out.print("Password:");
+			requestDataSb.append(input.readLine()+"\n\n"); //make the empty line, the end of packet
+			String head = "login\n";
+			// sent data to server
+			OutputStream ops = socket.getOutputStream();
+			OutputStreamWriter opsw = new OutputStreamWriter(ops);
+			BufferedWriter bw = new BufferedWriter(opsw);
+			bw.write(head+requestDataSb.toString());
+			bw.flush();
+			
+			//receiving data from server, see whether the login is successful
+			InputStream ips = socket.getInputStream();
+			InputStreamReader ipsr = new InputStreamReader(ips);
+			BufferedReader br = new BufferedReader(ipsr);
+			String respondHead = null;
+			String respondData = null;
+			/**
+			 * because in login parse, no one can send message to us,
+			 * only the server can reply to us, therefore blocking to wait the reply
+			 * will not cause problem
+			 */
+			while((respondHead = br.readLine()).equals(""));//skips empty lines
+			respondData = br.readLine();
+			br.readLine(); //skip the last empty line, clearing the buffer
+			/**
+			 * the format of the respond is 
+			 * code <type>\n
+			 * data ... data ...\n
+			 * \n
+			 * please refer to the description in the sending command parse
+			 * 
+			 */
+			String[] respondHeadParts = respondHead.split("\\s+");
+			int code = Integer.parseInt(respondHeadParts[0]);
+			
+			switch(code){
+			case Code.LOG_FAIL:
+				System.out.println("The password for this user is wrong! Please try again.");
+				break;
+			case Code.LOG_UNAME_NOT_EXIST:
+				System.out.println("This username does not exists.");
+				break;
+			case Code.LOG_DENY:
+				/*if the the server says deny, the data is how many second left to be blocked*/
+				int blockRemain = Integer.parseInt(respondData);
+				System.out.println("Three consecutive failure login, login is blocked.");
+				System.out.println("You will be able to try logining in again in "+blockRemain+" second(s).");
+				/*close the socket, terminating the program*/
+				socket.close();
+				return;
+			case Code.LOG_SUCCESS:
+				/*if the server say sucess, the data is the username*/
+				System.out.println("Welcome "+ respondData+", you are now logged in.");
+				break loginLoop;
+			case Code.LOG_ALREADY_LOGGED:
+				System.out.println("This username has been logged in from elsewhere!");
+				break;
+			}
+			
+		}
+		
+		System.out.println("you can now start typing commands in below:");
+		
+		/*the normal sending command parse*/
 		while (true) {
-
+			/*********************************************************************/
+			/* The part is the common sending requests, and receiving responds parse*/
+			/*always looping*/
+			
 			/*********************************************************************/
 			/* this upper part is the senting data part */
 
@@ -74,6 +157,10 @@ public class Client {
 			bw.write(sb.toString());
 			bw.flush();
 
+			
+			
+			
+			
 			/*************************************************************************/
 			/* below is the receiving data part */
 
@@ -146,6 +233,7 @@ public class Client {
 				head = br.readLine();
 
 				String[] headParts = head.split("\\s+");
+				//System.out.println("["+head+"]");
 
 				/*
 				 * now the head has been read, we keep finding the two
@@ -180,6 +268,14 @@ public class Client {
 			for (String cur : output) {
 				System.out.println(cur);
 			}
+			if(this.loggingOut){
+				socket.close();
+				opsw.close();
+				ipsr.close();
+				bw.close();
+				br.close();
+				return;
+			}
 
 		}
 	}
@@ -212,12 +308,17 @@ public class Client {
 			isMe = true;
 		}
 		switch (code) {
+		case Code.LOG_OUT_REPLY:
+			this.loggingOut = true;
 		default:
-			if (isMe) {
+			data = data.trim();
+			if(!data.equals("")){
+				if (isMe) {
 
-				output.addFirst(data + "\n");
-			} else {
-				output.addLast(data + "\n");
+					output.addFirst(data + "\n");
+				} else {
+					output.addLast(data + "\n");
+				}
 			}
 		}
 		return isMe;
@@ -246,7 +347,7 @@ public class Client {
 			 * data, inputStream is empty, and so the runtimeException triggers
 			 */
 			ex.printStackTrace();
-			System.out.println("Cannot connect to the server.");
+			//System.out.println("Cannot connect to the server.");
 		} finally {
 			try {
 				if (client != null && client.socket != null)
